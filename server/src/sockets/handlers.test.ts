@@ -35,7 +35,7 @@ function connect(): ClientSocket<ServerToClientEvents, ClientToServerEvents> {
 describe('room creation and joining', () => {
   it('creates a room and returns a well-formed room code', async () => {
     const client = connect();
-    await new Promise((resolve) => client.on('connect', resolve));
+    await new Promise((resolve) => client.on('connect', () => resolve()));
 
     const res = await new Promise<CreateRoomResponse>((resolve) => {
       client.emit('create_room', { playerName: 'Alice' }, resolve);
@@ -48,13 +48,13 @@ describe('room creation and joining', () => {
 
   it('allows a second player to join with the room code', async () => {
     const host = connect();
-    await new Promise((resolve) => host.on('connect', resolve));
+    await new Promise((resolve) => host.on('connect', () => resolve()));
     const createRes = await new Promise<CreateRoomResponse>((resolve) =>
       host.emit('create_room', { playerName: 'Alice' }, resolve)
     );
 
     const guest = connect();
-    await new Promise((resolve) => guest.on('connect', resolve));
+    await new Promise((resolve) => guest.on('connect', () => resolve()));
     const joinRes = await new Promise<JoinRoomResponse>((resolve) =>
       guest.emit('join_room', { roomCode: createRes.roomCode!, playerName: 'Bob' }, resolve)
     );
@@ -67,7 +67,7 @@ describe('room creation and joining', () => {
 
   it('rejects joining a room that does not exist', async () => {
     const client = connect();
-    await new Promise((resolve) => client.on('connect', resolve));
+    await new Promise((resolve) => client.on('connect', () => resolve()));
 
     const res = await new Promise<JoinRoomResponse>((resolve) =>
       client.emit('join_room', { roomCode: '8B-ZZZZ', playerName: 'Bob' }, resolve)
@@ -80,7 +80,7 @@ describe('room creation and joining', () => {
 
   it('rejects a malformed room code', async () => {
     const client = connect();
-    await new Promise((resolve) => client.on('connect', resolve));
+    await new Promise((resolve) => client.on('connect', () => resolve()));
 
     const res = await new Promise<JoinRoomResponse>((resolve) =>
       client.emit('join_room', { roomCode: 'not-a-code', playerName: 'Bob' }, resolve)
@@ -93,19 +93,19 @@ describe('room creation and joining', () => {
 
   it('rejects joining a room that is already full', async () => {
     const host = connect();
-    await new Promise((resolve) => host.on('connect', resolve));
+    await new Promise((resolve) => host.on('connect', () => resolve()));
     const createRes = await new Promise<CreateRoomResponse>((resolve) =>
       host.emit('create_room', { playerName: 'Alice' }, resolve)
     );
 
     const guest1 = connect();
-    await new Promise((resolve) => guest1.on('connect', resolve));
+    await new Promise((resolve) => guest1.on('connect', () => resolve()));
     await new Promise<JoinRoomResponse>((resolve) =>
       guest1.emit('join_room', { roomCode: createRes.roomCode!, playerName: 'Bob' }, resolve)
     );
 
     const guest2 = connect();
-    await new Promise((resolve) => guest2.on('connect', resolve));
+    await new Promise((resolve) => guest2.on('connect', () => resolve()));
     const res = await new Promise<JoinRoomResponse>((resolve) =>
       guest2.emit('join_room', { roomCode: createRes.roomCode!, playerName: 'Carol' }, resolve)
     );
@@ -121,13 +121,13 @@ describe('room creation and joining', () => {
 describe('turn-based shot validation', () => {
   it('rejects a shot from the player whose turn it is not', async () => {
     const host = connect();
-    await new Promise((resolve) => host.on('connect', resolve));
+    await new Promise((resolve) => host.on('connect', () => resolve()));
     const createRes = await new Promise<CreateRoomResponse>((resolve) =>
       host.emit('create_room', { playerName: 'Alice' }, resolve)
     );
 
     const guest = connect();
-    await new Promise((resolve) => guest.on('connect', resolve));
+    await new Promise((resolve) => guest.on('connect', () => resolve()));
     await new Promise<JoinRoomResponse>((resolve) =>
       guest.emit('join_room', { roomCode: createRes.roomCode!, playerName: 'Bob' }, resolve)
     );
@@ -149,13 +149,13 @@ describe('turn-based shot validation', () => {
 
   it('accepts a legal shot from the current shooter and broadcasts updated state', async () => {
     const host = connect();
-    await new Promise((resolve) => host.on('connect', resolve));
+    await new Promise((resolve) => host.on('connect', () => resolve()));
     const createRes = await new Promise<CreateRoomResponse>((resolve) =>
       host.emit('create_room', { playerName: 'Alice' }, resolve)
     );
 
     const guest = connect();
-    await new Promise((resolve) => guest.on('connect', resolve));
+    await new Promise((resolve) => guest.on('connect', () => resolve()));
     await new Promise<JoinRoomResponse>((resolve) =>
       guest.emit('join_room', { roomCode: createRes.roomCode!, playerName: 'Bob' }, resolve)
     );
@@ -177,12 +177,12 @@ describe('turn-based shot validation', () => {
 
   it('rejects a malformed shot payload (invalid power)', async () => {
     const host = connect();
-    await new Promise((resolve) => host.on('connect', resolve));
+    await new Promise((resolve) => host.on('connect', () => resolve()));
     const createRes = await new Promise<CreateRoomResponse>((resolve) =>
       host.emit('create_room', { playerName: 'Alice' }, resolve)
     );
     const guest = connect();
-    await new Promise((resolve) => guest.on('connect', resolve));
+    await new Promise((resolve) => guest.on('connect', () => resolve()));
     await new Promise<JoinRoomResponse>((resolve) =>
       guest.emit('join_room', { roomCode: createRes.roomCode!, playerName: 'Bob' }, resolve)
     );
