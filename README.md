@@ -108,8 +108,8 @@ The codebase is a monorepo with three packages:
 Requires **Node.js 18+** and npm.
 
 ```bash
-git clone <your-repo-url> classic-8-ball-pool
-cd classic-8-ball-pool
+git clone <your-repo-url> billiard-clash
+cd billiard-clash
 npm install
 ```
 
@@ -205,7 +205,7 @@ Client UI/rendering code does not have automated tests (no headless browser is a
 ## Project Structure
 
 ```text
-classic-8-ball-pool/
+billiard-clash/
 ├── shared/                    # Pure game logic, used by both client and server
 │   └── src/
 │       ├── physics/           # engine.ts (simulation), rack.ts (rack formation)
