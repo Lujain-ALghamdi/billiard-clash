@@ -47,6 +47,7 @@ export type ErrorCode =
   | 'INVALID_ROOM_CODE'
   | 'NOT_YOUR_TURN'
   | 'INVALID_SHOT'
+  | 'INVALID_PLACEMENT'
   | 'MATCH_NOT_ACTIVE'
   | 'SERVER_ERROR';
 

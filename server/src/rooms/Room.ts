@@ -1,7 +1,9 @@
 import {
   applyShotToBalls,
   buildRack,
+  defaultCueBallPlacement,
   evaluateShot,
+  isBallInHandPlacementRestricted,
   nextShooter,
   shouldGrantBallInHand,
   stepSimulation,
@@ -89,6 +91,16 @@ export class Room {
   }
 
   /**
+   * True if the currently-active ball-in-hand must be restricted to
+   * behind the head string (WPA break-foul rule) rather than anywhere on
+   * the table (standard foul rule). Based on the shot that most recently
+   * granted ball-in-hand — see shared/src/physics/placement.ts.
+   */
+  isBallInHandRestrictedToHeadString(): boolean {
+    return isBallInHandPlacementRestricted(this.state.lastShot?.isBreakShot ?? false, this.state.lastShot?.foul ?? null);
+  }
+
+  /**
    * Phase 1 of shot resolution: validates nothing itself (caller already
    * did), but applies ball-in-hand placement, snapshots the at-rest ball
    * positions (for the shot_started broadcast so both clients can replay
@@ -173,11 +185,14 @@ export class Room {
     });
 
     // Re-spot a scratched cue ball at the head spot for the next shooter.
+    // This is only a provisional starting point for the incoming player's
+    // interactive ball-in-hand placement — never their forced final
+    // location (see shared/src/physics/placement.ts).
     if (cueBallPocketed) {
       const cueBall = this.state.balls.find((b) => b.id === 0)!;
       cueBall.pocketed = false;
       cueBall.onTable = true;
-      cueBall.position = { x: 750, y: 250 };
+      cueBall.position = defaultCueBallPlacement();
       cueBall.velocity = Vec2.zero();
     }
 

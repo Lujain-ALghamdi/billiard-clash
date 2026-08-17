@@ -1,4 +1,4 @@
-import { BALL, TABLE, Vec2, getPockets, type BallState, type BallGroup } from '@pool/shared';
+import { BALL, TABLE, Vec2, getPockets, isLegalCueBallPlacement, defaultCueBallPlacement, type BallState, type BallGroup } from '@pool/shared';
 import type { Difficulty } from '@pool/shared';
 
 export interface PlannedShot {
@@ -152,6 +152,67 @@ function safetyShot(cue: BallState, balls: BallState[]): PlannedShot {
 
 function fallbackShot(): PlannedShot {
   return { direction: { x: 1, y: 0 }, power: 30, targetBallId: null, targetPocket: null };
+}
+
+/**
+ * Plans a ball-in-hand placement for the AI: samples a grid of legal
+ * candidate positions (via the same shared isLegalCueBallPlacement used
+ * by the server and human placement preview, so AI and human placement
+ * can't drift on legality), scores each by the best shot it would set up,
+ * and picks among the top candidates (difficulty-scaled, same as shot
+ * selection) rather than always taking the single best spot.
+ */
+export function planAIBallInHandPlacement(
+  balls: BallState[],
+  aiGroup: BallGroup | null,
+  difficulty: Difficulty,
+  restrictToHeadStringArea: boolean
+): Vec2 {
+  const profile = PROFILES[difficulty];
+  const legalTargets = getLegalTargets(balls, aiGroup);
+  const pockets = getPockets();
+  const otherBalls = balls.filter((b) => b.id !== 0);
+
+  const margin = BALL.RADIUS + 2;
+  const gridCols = 18;
+  const gridRows = 9;
+
+  const candidates: { pos: Vec2; score: number }[] = [];
+
+  for (let gx = 0; gx <= gridCols; gx++) {
+    for (let gy = 0; gy <= gridRows; gy++) {
+      const pos: Vec2 = {
+        x: margin + ((TABLE.WIDTH - margin * 2) * gx) / gridCols,
+        y: margin + ((TABLE.HEIGHT - margin * 2) * gy) / gridRows,
+      };
+      if (!isLegalCueBallPlacement(pos, otherBalls, { restrictToHeadStringArea })) continue;
+
+      const hypotheticalCue: BallState = { id: 0, position: pos, velocity: Vec2.zero(), pocketed: false, onTable: true };
+      let bestForPos = -Infinity;
+      for (const target of legalTargets) {
+        for (const pocket of pockets) {
+          const candidate = evaluateCandidate(hypotheticalCue, target, pocket.position, balls);
+          if (candidate && candidate.score > bestForPos) bestForPos = candidate.score;
+        }
+      }
+      // Positions with no legal shot at all are still viable (better than
+      // nothing — the AI must place the ball somewhere), scored low.
+      candidates.push({ pos, score: bestForPos === -Infinity ? -1 : bestForPos });
+    }
+  }
+
+  if (candidates.length === 0) {
+    // No legal grid sample found (shouldn't normally happen) — fall back to
+    // the default spot if it happens to be legal here, otherwise the head/foot spot area.
+    const fallback = defaultCueBallPlacement();
+    return isLegalCueBallPlacement(fallback, otherBalls, { restrictToHeadStringArea })
+      ? fallback
+      : { x: restrictToHeadStringArea ? TABLE.WIDTH - margin : TABLE.WIDTH / 2, y: TABLE.HEIGHT / 2 };
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  const pool = candidates.slice(0, Math.max(1, profile.candidatesConsidered));
+  return pool[Math.floor(Math.random() * pool.length)].pos;
 }
 
 function clamp(v: number, min: number, max: number): number {

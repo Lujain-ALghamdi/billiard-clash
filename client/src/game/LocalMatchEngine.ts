@@ -1,7 +1,9 @@
 import {
   applyShotToBalls,
   buildRack,
+  defaultCueBallPlacement,
   evaluateShot,
+  isBallInHandPlacementRestricted,
   nextShooter,
   shouldGrantBallInHand,
   stepSimulation,
@@ -50,6 +52,16 @@ export class LocalMatchEngine {
 
   getShooterGroup(playerId: string): BallGroup | null {
     return this.state.players.find((p) => p.id === playerId)?.group ?? null;
+  }
+
+  /**
+   * True if the currently-active ball-in-hand must be restricted to
+   * behind the head string (WPA break-foul rule). Mirrors
+   * server/src/rooms/Room.ts.isBallInHandRestrictedToHeadString() so
+   * online and offline play can't drift on this rule.
+   */
+  isBallInHandRestrictedToHeadString(): boolean {
+    return isBallInHandPlacementRestricted(this.state.lastShot?.isBreakShot ?? false, this.state.lastShot?.foul ?? null);
   }
 
   /** Applies the shot's initial velocity; caller drives stepSimulation each frame via `advance`. */
@@ -117,7 +129,7 @@ export class LocalMatchEngine {
       const cueBall = this.state.balls.find((b) => b.id === 0)!;
       cueBall.pocketed = false;
       cueBall.onTable = true;
-      cueBall.position = { x: 750, y: 250 };
+      cueBall.position = defaultCueBallPlacement();
       cueBall.velocity = Vec2.zero();
     }
 

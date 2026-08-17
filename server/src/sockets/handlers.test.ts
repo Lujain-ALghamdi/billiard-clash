@@ -297,3 +297,134 @@ describe('shot_started / shot_applied broadcast sequence (online animation)', ()
     guest.disconnect();
   });
 });
+
+describe('ball-in-hand placement validation (server-authoritative)', () => {
+  async function setupRoomAndScratch() {
+    const host = connect();
+    await new Promise((resolve) => host.on('connect', () => resolve()));
+    const createRes = await new Promise<CreateRoomResponse>((resolve) =>
+      host.emit('create_room', { playerName: 'Alice' }, resolve)
+    );
+    const guest = connect();
+    await new Promise((resolve) => guest.on('connect', () => resolve()));
+    await new Promise<JoinRoomResponse>((resolve) =>
+      guest.emit('join_room', { roomCode: createRes.roomCode!, playerName: 'Bob' }, resolve)
+    );
+    const roomCode = createRes.roomCode!;
+
+    // Aiming the break shot at a corner pocket reliably scratches the cue
+    // ball (verified empirically): the head spot at (750, 250) has a clear
+    // line to the (1000, 500) corner pocket with nothing in the way.
+    const appliedPromise = new Promise<MatchState & { shotId: string }>((resolve) =>
+      host.once('shot_applied', (s) => resolve(s as MatchState & { shotId: string }))
+    );
+    host.emit('take_shot', { roomCode, shot: { direction: { x: 0.707, y: 0.707 }, power: 100 } }, () => {});
+    const applied = await appliedPromise;
+    expect(applied.ballInHand).toBe(true);
+    expect(applied.lastShot?.foul).toBe('scratch');
+
+    return { host, guest, roomCode, afterScratchState: applied };
+  }
+
+  it('grants ball-in-hand to the incoming player after a scratch', async () => {
+    const { host, guest, afterScratchState } = await setupRoomAndScratch();
+    // Turn passed to the guest (the non-shooter) after the host's foul.
+    expect(afterScratchState.currentTurnPlayerId).toBe(afterScratchState.players[1].id);
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('accepts a legal placement behind the head string (break-foul restriction applies)', async () => {
+    const { host, guest, roomCode } = await setupRoomAndScratch();
+    // The scratch happened ON the break, so placement is WPA-restricted to
+    // behind the head string (x >= 750). This spot is clear of the rack.
+    const res = await new Promise<ActionAck>((resolve) =>
+      guest.emit('take_shot', { roomCode, shot: { direction: { x: -1, y: 0 }, power: 30, cueBallPlacement: { x: 900, y: 250 } } }, resolve)
+    );
+    expect(res.ok).toBe(true);
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('rejects a placement in front of the head string when break-restricted', async () => {
+    const { host, guest, roomCode } = await setupRoomAndScratch();
+    // x < 750 is in front of the head string — illegal for a break-foul ball-in-hand.
+    const res = await new Promise<ActionAck>((resolve) =>
+      guest.emit('take_shot', { roomCode, shot: { direction: { x: -1, y: 0 }, power: 30, cueBallPlacement: { x: 400, y: 250 } } }, resolve)
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('INVALID_PLACEMENT');
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('rejects a placement outside the table bounds', async () => {
+    const { host, guest, roomCode } = await setupRoomAndScratch();
+    const res = await new Promise<ActionAck>((resolve) =>
+      guest.emit('take_shot', { roomCode, shot: { direction: { x: -1, y: 0 }, power: 30, cueBallPlacement: { x: 5000, y: 250 } } }, resolve)
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('INVALID_PLACEMENT');
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('rejects a placement overlapping an object ball', async () => {
+    const { host, guest, roomCode, afterScratchState } = await setupRoomAndScratch();
+    const someRackBall = afterScratchState.balls.find((b) => b.id !== 0 && !b.pocketed)!;
+    const res = await new Promise<ActionAck>((resolve) =>
+      guest.emit(
+        'take_shot',
+        { roomCode, shot: { direction: { x: -1, y: 0 }, power: 30, cueBallPlacement: { x: someRackBall.position.x, y: someRackBall.position.y } } },
+        resolve
+      )
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('INVALID_PLACEMENT');
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('rejects a take_shot with ballInHand active but no placement supplied', async () => {
+    const { host, guest, roomCode } = await setupRoomAndScratch();
+    const res = await new Promise<ActionAck>((resolve) =>
+      guest.emit('take_shot', { roomCode, shot: { direction: { x: -1, y: 0 }, power: 30 } }, resolve)
+    );
+    expect(res.ok).toBe(false);
+    expect(res.error?.code).toBe('INVALID_PLACEMENT');
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('does not restrict placement to the head string for a standard (non-break) foul', async () => {
+    const { host, guest, roomCode } = await setupRoomAndScratch();
+
+    // Guest's ball-in-hand shot: place legally behind the head string, then
+    // deliberately scratch again (aiming at the top-right corner) so this
+    // is now a NON-break foul — restriction should no longer apply.
+    const secondAppliedPromise = new Promise<MatchState & { shotId: string }>((resolve) =>
+      guest.once('shot_applied', (s) => resolve(s as MatchState & { shotId: string }))
+    );
+    const shot2Ack = await new Promise<ActionAck>((resolve) =>
+      guest.emit(
+        'take_shot',
+        { roomCode, shot: { direction: { x: 0.35, y: -0.94 }, power: 100, cueBallPlacement: { x: 900, y: 250 } } },
+        resolve
+      )
+    );
+    expect(shot2Ack.ok).toBe(true);
+    const secondApplied = await secondAppliedPromise;
+    expect(secondApplied.lastShot?.foul).toBe('scratch');
+    expect(secondApplied.ballInHand).toBe(true);
+
+    // Now it's the host's ball-in-hand, from a NON-break foul — a placement
+    // in front of the head string (x < 750) should be accepted this time.
+    const res = await new Promise<ActionAck>((resolve) =>
+      host.emit('take_shot', { roomCode, shot: { direction: { x: 1, y: 0 }, power: 15, cueBallPlacement: { x: 400, y: 250 } } }, resolve)
+    );
+    expect(res.ok).toBe(true);
+
+    host.disconnect();
+    guest.disconnect();
+  });
+});

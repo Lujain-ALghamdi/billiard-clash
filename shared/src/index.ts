@@ -5,4 +5,5 @@ export * from './network';
 export * from './physics/engine';
 export * from './physics/rack';
 export * from './physics/shot';
+export * from './physics/placement';
 export * from './rules/eightBallRules';

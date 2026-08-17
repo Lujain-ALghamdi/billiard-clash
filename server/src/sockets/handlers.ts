@@ -3,6 +3,7 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
 } from '@pool/shared';
+import { isLegalCueBallPlacement } from '@pool/shared';
 import { RoomManager } from '../rooms/RoomManager';
 import { validatePlayerName, validateRoomCodeInput, validateShotRequest } from '../validation/validators';
 
@@ -90,6 +91,31 @@ export function registerSocketHandlers(io: TypedServer, roomManager: RoomManager
       const shotCheck = validateShotRequest(payload.shot);
       if (!shotCheck.valid) {
         return ack({ ok: false, error: { code: 'INVALID_SHOT', message: shotCheck.reason! } });
+      }
+
+      // Ball-in-hand: never trust a client-supplied position. Validate it
+      // server-side against the actual current ball positions (and the
+      // WPA break-foul head-string restriction, when applicable) before
+      // accepting the shot at all.
+      if (room.state.ballInHand) {
+        if (!payload.shot.cueBallPlacement) {
+          return ack({ ok: false, error: { code: 'INVALID_PLACEMENT', message: 'Ball-in-hand requires a cue ball placement.' } });
+        }
+        const restricted = room.isBallInHandRestrictedToHeadString();
+        const legal = isLegalCueBallPlacement(payload.shot.cueBallPlacement, room.state.balls, {
+          restrictToHeadStringArea: restricted,
+        });
+        if (!legal) {
+          return ack({
+            ok: false,
+            error: {
+              code: 'INVALID_PLACEMENT',
+              message: restricted
+                ? 'Illegal placement: must be behind the head string after a break foul.'
+                : 'Illegal placement: must be on the table and not overlap another ball.',
+            },
+          });
+        }
       }
 
       // Phase 1: apply placement/velocity and broadcast shot_started so both
