@@ -2,7 +2,6 @@ import type { Server, Socket } from 'socket.io';
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
-  MatchState,
 } from '@pool/shared';
 import { RoomManager } from '../rooms/RoomManager';
 import { validatePlayerName, validateRoomCodeInput, validateShotRequest } from '../validation/validators';
@@ -93,9 +92,24 @@ export function registerSocketHandlers(io: TypedServer, roomManager: RoomManager
         return ack({ ok: false, error: { code: 'INVALID_SHOT', message: shotCheck.reason! } });
       }
 
-      room.applyShot(session.playerId, payload.shot);
+      // Phase 1: apply placement/velocity and broadcast shot_started so both
+      // clients can begin an identical local physics replay immediately —
+      // well before the server's own simulation (run synchronously below)
+      // finishes and produces the authoritative result.
+      const { shotId, preShotBalls, isBreakShot } = room.beginShot(session.playerId, payload.shot);
       ack({ ok: true });
-      io.to(room.code).emit('shot_applied', room.state as MatchState);
+      io.to(room.code).emit('shot_started', {
+        roomCode: room.code,
+        shotId,
+        preShotBalls,
+        shot: payload.shot,
+        shooterId: session.playerId,
+        isBreakShot,
+      });
+
+      // Phase 2: resolve authoritatively and broadcast the final result.
+      room.resolveShot();
+      io.to(room.code).emit('shot_applied', { ...room.state, roomCode: room.code, shotId });
     });
 
     socket.on('request_rematch', (payload) => {

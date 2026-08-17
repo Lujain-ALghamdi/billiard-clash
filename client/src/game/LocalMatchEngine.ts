@@ -1,11 +1,10 @@
 import {
+  applyShotToBalls,
   buildRack,
   evaluateShot,
   nextShooter,
   shouldGrantBallInHand,
   stepSimulation,
-  PHYSICS,
-  SHOT_POWER,
   Vec2,
   type BallGroup,
   type MatchState,
@@ -64,13 +63,13 @@ export class LocalMatchEngine {
         cue.pocketed = false;
       }
     }
-    const cue = this.state.balls.find((b) => b.id === 0)!;
-    const power = Math.max(SHOT_POWER.MIN, Math.min(SHOT_POWER.MAX, shot.power));
-    const speed =
-      PHYSICS.MIN_SHOT_SPEED +
-      ((power - SHOT_POWER.MIN) / (SHOT_POWER.MAX - SHOT_POWER.MIN)) * (PHYSICS.MAX_SHOT_SPEED - PHYSICS.MIN_SHOT_SPEED);
-    cue.velocity = Vec2.scale(Vec2.normalize(shot.direction), speed);
-    this.pendingPreShotSnapshot = this.state.balls.map((b) => ({ ...b, position: { ...b.position } }));
+    // Snapshot at-rest positions before the shot's velocity is applied —
+    // matches the same convention server/src/rooms/Room.ts uses for its
+    // preShotBalls, so both codepaths evaluate rules identically.
+    this.pendingPreShotSnapshot = this.state.balls.map((b) => ({ ...b, position: { ...b.position }, velocity: { ...b.velocity } }));
+    // Same shared helper the server and OnlineSession use — one formula,
+    // no chance of the three codepaths' shot-power curves drifting apart.
+    applyShotToBalls(this.state.balls, shot);
     this.pendingEvents = [];
     this.pendingShooterId = this.state.currentTurnPlayerId;
     this.pendingIsBreak = this.state.phase === 'break';

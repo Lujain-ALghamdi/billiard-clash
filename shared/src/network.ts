@@ -1,4 +1,4 @@
-import type { MatchState, ShotRequest } from './types';
+import type { BallState, MatchState, ShotRequest } from './types';
 
 /** Events sent from client to server. */
 export interface ClientToServerEvents {
@@ -11,11 +11,31 @@ export interface ClientToServerEvents {
   chat_message?: (payload: { roomCode: string; text: string }) => void;
 }
 
+/**
+ * Broadcast the instant a shot is validated, before the server resolves it.
+ * Both clients replay this shot locally (via the shared physics engine)
+ * for a smooth ~60fps animation, rather than jumping straight to the
+ * final post-shot positions. See shot_applied for the authoritative result.
+ */
+export interface ShotStartedPayload {
+  roomCode: string;
+  /** Correlates this playback with the shot_applied broadcast that finalizes it. */
+  shotId: string;
+  /** Ball positions at rest, immediately before this shot's velocity is applied. */
+  preShotBalls: BallState[];
+  /** The validated shot (server-clamped power, resolved cueBallPlacement if any). */
+  shot: ShotRequest;
+  shooterId: string;
+  isBreakShot: boolean;
+}
+
 /** Events sent from server to client. */
 export interface ServerToClientEvents {
   room_state: (state: MatchState & { roomCode: string }) => void;
   opponent_status: (status: { connected: boolean; reconnecting: boolean }) => void;
-  shot_applied: (state: MatchState) => void;
+  shot_started: (payload: ShotStartedPayload) => void;
+  /** Authoritative final state. shotId correlates it with the shot_started that preceded it. */
+  shot_applied: (state: MatchState & { roomCode: string; shotId: string }) => void;
   rematch_requested: (payload: { byPlayerId: string }) => void;
   rematch_started: (state: MatchState) => void;
   error_message: (payload: { code: ErrorCode; message: string }) => void;

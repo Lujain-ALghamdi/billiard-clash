@@ -1,17 +1,18 @@
 import {
+  applyShotToBalls,
   buildRack,
   evaluateShot,
   nextShooter,
   shouldGrantBallInHand,
   stepSimulation,
-  PHYSICS,
-  SHOT_POWER,
   Vec2,
+  type BallState,
   type MatchState,
   type PlayerInfo,
   type ShotRequest,
   type ShotResult,
 } from '@pool/shared';
+import { randomUUID } from 'crypto';
 
 const RECONNECT_GRACE_MS = 60_000;
 
@@ -88,14 +89,19 @@ export class Room {
   }
 
   /**
-   * Applies a validated shot request: runs the physics simulation to
-   * completion, evaluates WPA rules, and mutates authoritative state.
-   * Returns the resulting ShotResult for broadcast.
+   * Phase 1 of shot resolution: validates nothing itself (caller already
+   * did), but applies ball-in-hand placement, snapshots the at-rest ball
+   * positions (for the shot_started broadcast so both clients can replay
+   * the shot locally), and sets the cue ball's initial velocity. Does NOT
+   * run the physics simulation — call resolveShot() next to do that.
    */
-  applyShot(playerId: string, shot: ShotRequest): ShotResult {
-    const opponent = this.players.find((p) => p.info.id !== playerId)!.info;
+  beginShot(playerId: string, shot: ShotRequest): { shotId: string; preShotBalls: BallState[]; isBreakShot: boolean } {
     const isBreakShot = this.state.phase === 'break';
 
+    // Snapshot at-rest positions BEFORE the cue ball's placement/velocity
+    // are applied, matching what a fresh replay needs to start from.
+    // Ball-in-hand placement (if any) happens first so the snapshot
+    // reflects the actual starting position of this shot.
     if (this.state.ballInHand && shot.cueBallPlacement) {
       const cue = this.state.balls.find((b) => b.id === 0);
       if (cue) {
@@ -106,25 +112,42 @@ export class Room {
       }
     }
 
-    const cue = this.state.balls.find((b) => b.id === 0)!;
-    const power = Math.max(SHOT_POWER.MIN, Math.min(SHOT_POWER.MAX, shot.power));
-    const speed =
-      PHYSICS.MIN_SHOT_SPEED +
-      ((power - SHOT_POWER.MIN) / (SHOT_POWER.MAX - SHOT_POWER.MIN)) *
-        (PHYSICS.MAX_SHOT_SPEED - PHYSICS.MIN_SHOT_SPEED);
-    cue.velocity = Vec2.scale(Vec2.normalize(shot.direction), speed);
+    const preShotBalls = this.state.balls.map((b) => ({ ...b, position: { ...b.position }, velocity: { ...b.velocity } }));
 
-    const preShotSnapshot = this.state.balls.map((b) => ({ ...b, position: { ...b.position } }));
+    // Now apply the actual shot velocity (preShotBalls above is intentionally
+    // captured with zero cue velocity — it's the replay's starting frame).
+    applyShotToBalls(this.state.balls, shot);
+
+    const shotId = randomUUID();
+    this.pendingShot = { shotId, playerId, preShotBalls, isBreakShot };
+    return { shotId, preShotBalls, isBreakShot };
+  }
+
+  private pendingShot: { shotId: string; playerId: string; preShotBalls: BallState[]; isBreakShot: boolean } | null = null;
+
+  /**
+   * Phase 2: runs the physics simulation to completion and evaluates WPA
+   * rules against the snapshot captured in beginShot(). Must be called
+   * after beginShot() in the same request. Returns the authoritative
+   * result plus the shotId it corresponds to, for the shot_applied broadcast.
+   */
+  resolveShot(): { shotId: string; result: ShotResult } {
+    const pending = this.pendingShot;
+    if (!pending) throw new Error('Room.resolveShot() called without a preceding beginShot()');
+    this.pendingShot = null;
+
+    const { shotId, playerId, preShotBalls, isBreakShot } = pending;
+    const opponent = this.players.find((p) => p.info.id !== playerId)!.info;
 
     const allEvents: ReturnType<typeof stepSimulation>['events'] = [];
     let allStopped = false;
     let iterations = 0;
-    const pocketedBefore = new Set(preShotSnapshot.filter((b) => b.pocketed).map((b) => b.id));
+    const pocketedBefore = new Set(preShotBalls.filter((b) => b.pocketed).map((b) => b.id));
 
     while (!allStopped && iterations < 2000) {
-      const result = stepSimulation(this.state.balls, 1 / 60);
-      allEvents.push(...result.events);
-      allStopped = result.allStopped;
+      const stepResult = stepSimulation(this.state.balls, 1 / 60);
+      allEvents.push(...stepResult.events);
+      allStopped = stepResult.allStopped;
       iterations++;
     }
 
@@ -137,7 +160,7 @@ export class Room {
     const groupsAlreadyAssigned = this.players.every((p) => p.info.group !== null);
 
     const result = evaluateShot({
-      preShotBalls: preShotSnapshot,
+      preShotBalls,
       events: allEvents,
       pocketedThisShot,
       cueBallPocketed,
@@ -177,7 +200,7 @@ export class Room {
     }
 
     this.state.lastShot = result;
-    return result;
+    return { shotId, result };
   }
 
   resetForRematch(): void {

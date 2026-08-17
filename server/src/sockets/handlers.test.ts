@@ -9,6 +9,8 @@ import type {
   CreateRoomResponse,
   JoinRoomResponse,
   ActionAck,
+  ShotStartedPayload,
+  MatchState,
 } from '@pool/shared';
 import { RoomManager } from '../rooms/RoomManager';
 import { registerSocketHandlers } from '../sockets/handlers';
@@ -197,6 +199,100 @@ describe('turn-based shot validation', () => {
 
     expect(res.ok).toBe(false);
     expect(res.error?.code).toBe('INVALID_SHOT');
+    host.disconnect();
+    guest.disconnect();
+  });
+});
+
+describe('shot_started / shot_applied broadcast sequence (online animation)', () => {
+  async function setupRoom() {
+    const host = connect();
+    await new Promise((resolve) => host.on('connect', () => resolve()));
+    const createRes = await new Promise<CreateRoomResponse>((resolve) =>
+      host.emit('create_room', { playerName: 'Alice' }, resolve)
+    );
+    const guest = connect();
+    await new Promise((resolve) => guest.on('connect', () => resolve()));
+    await new Promise<JoinRoomResponse>((resolve) =>
+      guest.emit('join_room', { roomCode: createRes.roomCode!, playerName: 'Bob' }, resolve)
+    );
+    return { host, guest, roomCode: createRes.roomCode! };
+  }
+
+  it('broadcasts shot_started (with a pre-shot snapshot) before shot_applied, to BOTH host and guest', async () => {
+    const { host, guest, roomCode } = await setupRoom();
+
+    const order: string[] = [];
+    const hostStarted = new Promise<ShotStartedPayload>((resolve) =>
+      host.once('shot_started', (p) => {
+        order.push('host:shot_started');
+        resolve(p);
+      })
+    );
+    const guestStarted = new Promise<ShotStartedPayload>((resolve) =>
+      guest.once('shot_started', (p) => {
+        order.push('guest:shot_started');
+        resolve(p);
+      })
+    );
+    const hostApplied = new Promise<MatchState & { shotId: string }>((resolve) =>
+      host.once('shot_applied', (s) => {
+        order.push('host:shot_applied');
+        resolve(s as MatchState & { shotId: string });
+      })
+    );
+    const guestApplied = new Promise<MatchState & { shotId: string }>((resolve) =>
+      guest.once('shot_applied', (s) => {
+        order.push('guest:shot_applied');
+        resolve(s as MatchState & { shotId: string });
+      })
+    );
+
+    host.emit('take_shot', { roomCode, shot: { direction: { x: -1, y: 0.02 }, power: 90 } }, () => {});
+
+    const [started, appliedHost, appliedGuest] = await Promise.all([hostStarted, hostApplied, guestApplied]);
+    await guestStarted;
+
+    // Both clients received both events.
+    expect(order.filter((e) => e.endsWith('shot_started'))).toHaveLength(2);
+    expect(order.filter((e) => e.endsWith('shot_applied'))).toHaveLength(2);
+
+    // shot_started carries a non-empty pre-shot snapshot (16 balls) and the validated shot.
+    expect(started.preShotBalls).toHaveLength(16);
+    expect(started.shot.power).toBe(90);
+    expect(started.roomCode).toBe(roomCode);
+    expect(typeof started.shotId).toBe('string');
+    expect(started.shotId.length).toBeGreaterThan(0);
+
+    // shot_applied correlates via the same shotId, and is the authoritative final state.
+    expect(appliedHost.shotId).toBe(started.shotId);
+    expect(appliedGuest.shotId).toBe(started.shotId);
+
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('the pre-shot snapshot has the cue ball at rest (zero velocity) — the client applies the shot itself', async () => {
+    const { host, guest, roomCode } = await setupRoom();
+
+    const startedPromise = new Promise<ShotStartedPayload>((resolve) => host.once('shot_started', resolve));
+    host.emit('take_shot', { roomCode, shot: { direction: { x: -1, y: 0 }, power: 75 } }, () => {});
+    const started = await startedPromise;
+
+    const cueBall = started.preShotBalls.find((b) => b.id === 0);
+    expect(cueBall).toBeDefined();
+    expect(cueBall!.velocity).toEqual({ x: 0, y: 0 });
+
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('marks isBreakShot correctly on the very first shot of a match', async () => {
+    const { host, guest, roomCode } = await setupRoom();
+    const startedPromise = new Promise<ShotStartedPayload>((resolve) => host.once('shot_started', resolve));
+    host.emit('take_shot', { roomCode, shot: { direction: { x: -1, y: 0 }, power: 75 } }, () => {});
+    const started = await startedPromise;
+    expect(started.isBreakShot).toBe(true);
     host.disconnect();
     guest.disconnect();
   });
