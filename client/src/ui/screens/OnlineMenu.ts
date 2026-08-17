@@ -11,6 +11,9 @@ type Tab = 'choose' | 'create' | 'join';
 export function renderOnlineMenu(root: HTMLElement, defaultName: string, cb: OnlineMenuCallbacks): void {
   let tab: Tab = 'choose';
   let playerName = defaultName || 'Player';
+  let createdRoomCode: string | undefined;
+  let createdPlayerId: string | undefined;
+  let activeCleanup: (() => void) | null = null;
 
   function draw(): void {
     if (tab === 'choose') {
@@ -30,7 +33,11 @@ export function renderOnlineMenu(root: HTMLElement, defaultName: string, cb: Onl
           </div>
         </div>
       `;
-      root.querySelector('#back')!.addEventListener('click', cb.onBack);
+      root.querySelector('#back')!.addEventListener('click', () => {
+        activeCleanup?.();
+        activeCleanup = null;
+        cb.onBack();
+      });
       root.querySelector('#create-room')!.addEventListener('click', () => {
         playerName = (root.querySelector('#player-name') as HTMLInputElement).value.trim() || 'Player';
         tab = 'create';
@@ -59,6 +66,10 @@ export function renderOnlineMenu(root: HTMLElement, defaultName: string, cb: Onl
         </div>
       `;
       root.querySelector('#back')!.addEventListener('click', () => {
+        activeCleanup?.();
+        activeCleanup = null;
+        createdRoomCode = undefined;
+        createdPlayerId = undefined;
         tab = 'choose';
         draw();
       });
@@ -101,10 +112,45 @@ export function renderOnlineMenu(root: HTMLElement, defaultName: string, cb: Onl
 
   function startCreateFlow(): void {
     const socket = getSocket();
+
+    // Guard against re-entrancy (e.g. a rapid double-click on Create Room):
+    // tear down any prior create-flow listeners before registering new ones.
+    activeCleanup?.();
+    activeCleanup = null;
+    createdRoomCode = undefined;
+    createdPlayerId = undefined;
+
+    const onRoomState = (state: MatchState & { roomCode: string }) => {
+      if (state.roomCode !== createdRoomCode) return;
+      if (createdPlayerId && state.players.every((p) => p.id)) {
+        cleanupCreateListeners();
+        cb.onMatchReady(createdRoomCode!, createdPlayerId, state);
+      }
+    };
+    const onConnectError = () => {
+      const errorEl = root.querySelector('#error');
+      if (errorEl) errorEl.textContent = 'Could not reach the multiplayer server. Check your connection and try again.';
+    };
+
+    function cleanupCreateListeners(): void {
+      socket.off('room_state', onRoomState);
+      socket.off('connect_error', onConnectError);
+    }
+    activeCleanup = cleanupCreateListeners;
+
+    // Registered before create_room is emitted so the server's immediate
+    // post-creation room_state (1 player) and the later post-join broadcast
+    // (2 players) are both seen by the same persistent listener — a
+    // socket.once() here would consume itself on the first event and miss
+    // the second, leaving the host stuck on the waiting screen.
+    socket.on('room_state', onRoomState);
+    socket.on('connect_error', onConnectError);
+
     socket.emit('create_room', { playerName }, (res) => {
       const errorEl = root.querySelector('#error');
       if (!res.ok || !res.roomCode || !res.playerId) {
         if (errorEl) errorEl.textContent = res.error?.message ?? 'Could not create room. Is the server running?';
+        cleanupCreateListeners();
         return;
       }
       const codeEl = root.querySelector('#room-code');
@@ -113,18 +159,8 @@ export function renderOnlineMenu(root: HTMLElement, defaultName: string, cb: Onl
         navigator.clipboard?.writeText(res.roomCode!).catch(() => {});
       });
 
-      const roomCode = res.roomCode;
-      const playerId = res.playerId;
-      socket.once('room_state', (state) => {
-        if (state.players.every((p) => p.id)) {
-          cb.onMatchReady(roomCode, playerId, state);
-        }
-      });
-    });
-
-    socket.on('connect_error', () => {
-      const errorEl = root.querySelector('#error');
-      if (errorEl) errorEl.textContent = 'Could not reach the multiplayer server. Check your connection and try again.';
+      createdRoomCode = res.roomCode;
+      createdPlayerId = res.playerId;
     });
   }
 
