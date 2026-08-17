@@ -1,5 +1,6 @@
 import { SHOT_POWER, Vec2, type MatchState } from '@pool/shared';
 import { TableRenderer } from './TableRenderer';
+import { PowerKeyController } from './PowerKeyController';
 import type { GameSession } from './GameSession';
 import type { SoundManager } from '../audio/SoundManager';
 import type { GameSettings } from '../utils/settings';
@@ -20,7 +21,7 @@ export class GameScreen {
   private power = SHOT_POWER.DEFAULT as number;
   private aimDirection: Vec2 = { x: -1, y: 0 };
   private mouseTablePos: Vec2 = { x: 0, y: 0 };
-  private keysDown = new Set<string>();
+  private powerKeys = new PowerKeyController();
   private paused = false;
   private placingCueBall = false;
   private rafId = 0;
@@ -73,6 +74,8 @@ export class GameScreen {
     this.canvas.addEventListener('touchend', this.onTouchEnd);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('blur', this.onWindowBlur);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
   }
 
   private onResize = () => this.renderer.resize();
@@ -130,11 +133,26 @@ export class GameScreen {
       this.togglePause();
       return;
     }
-    this.keysDown.add(e.key.toLowerCase());
+    // e.code is the physical key position and is unaffected by OS keyboard
+    // layout (Arabic, etc.) — see PowerKeyController for details. Power
+    // adjustment is intentionally ignored while paused; the key is still
+    // tracked as held so it resumes correctly on resume without needing
+    // the player to release and re-press it.
+    if (this.powerKeys.handleKeyDown(e.code)) {
+      e.preventDefault();
+    }
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
-    this.keysDown.delete(e.key.toLowerCase());
+    this.powerKeys.handleKeyUp(e.code);
+  };
+
+  private onWindowBlur = () => {
+    this.powerKeys.clear();
+  };
+
+  private onVisibilityChange = () => {
+    if (document.hidden) this.powerKeys.clear();
   };
 
   private shoot(): void {
@@ -149,6 +167,7 @@ export class GameScreen {
       cueBallPlacement: state.ballInHand ? Vec2.clone(this.mouseTablePos) : undefined,
     });
     this.power = SHOT_POWER.DEFAULT;
+    this.updateHUD();
   }
 
   private togglePause(): void {
@@ -264,9 +283,8 @@ export class GameScreen {
     const dt = Math.min(0.05, (now - this.lastFrameTime) / 1000);
     this.lastFrameTime = now;
 
-    if (!this.paused && this.keysDown.size > 0) {
-      if (this.keysDown.has('w')) this.power = clamp(this.power + SHOT_POWER.STEP_PER_SECOND * dt, SHOT_POWER.MIN, SHOT_POWER.MAX);
-      if (this.keysDown.has('s')) this.power = clamp(this.power - SHOT_POWER.STEP_PER_SECOND * dt, SHOT_POWER.MIN, SHOT_POWER.MAX);
+    if (!this.paused && this.powerKeys.hasAny()) {
+      this.power = this.powerKeys.tick(this.power, dt);
       this.updateHUD();
     }
 
@@ -293,6 +311,9 @@ export class GameScreen {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('blur', this.onWindowBlur);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    this.powerKeys.clear();
     this.session.leave();
   }
 }
