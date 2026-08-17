@@ -173,6 +173,11 @@ export class OnlineSession implements GameSession {
     return !this.animating && this.state.currentTurnPlayerId === this.myPlayerId && this.state.phase !== 'game_over';
   }
 
+  /** True while this shot's local physics replay is still animating (see the class doc comment above). */
+  isShotInProgress(): boolean {
+    return this.animating;
+  }
+
   submitShot(shot: ShotRequest): void {
     if (!this.isMyTurn()) return;
     this.socket.emit('take_shot', { roomCode: this.roomCode, shot }, (ack) => {

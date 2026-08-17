@@ -1,7 +1,7 @@
 import type { MatchState, ShotRequest, Difficulty } from '@pool/shared';
 import { PHYSICS } from '@pool/shared';
 import { LocalMatchEngine } from './LocalMatchEngine';
-import { planAIShot } from '../ai/AIOpponent';
+import { planAIShot, planAIBallInHandPlacement } from '../ai/AIOpponent';
 import type { GameSession } from './GameSession';
 
 export class VsComputerSession implements GameSession {
@@ -13,6 +13,7 @@ export class VsComputerSession implements GameSession {
   private tickListeners: ((state: MatchState) => void)[] = [];
   private simulating = false;
   private aiThinking = false;
+  private aiThinkTimer: ReturnType<typeof setTimeout> | null = null;
   onAIThinkingChange?: (thinking: boolean) => void;
 
   constructor(humanName: string, difficulty: Difficulty) {
@@ -26,7 +27,12 @@ export class VsComputerSession implements GameSession {
   }
 
   isMyTurn(): boolean {
-    return this.engine.isHumanTurn();
+    return !this.simulating && this.engine.isHumanTurn();
+  }
+
+  /** True while ANY shot (human's or the AI's) is actively resolving. */
+  isShotInProgress(): boolean {
+    return this.simulating;
   }
 
   submitShot(shot: ShotRequest): void {
@@ -62,6 +68,10 @@ export class VsComputerSession implements GameSession {
   }
 
   private maybeTriggerAI(): void {
+    // Terminal state: never schedule another AI turn once the match has ended,
+    // regardless of whose turn currentTurnPlayerId happens to still say —
+    // see LocalMatchEngine.resolveShot(), which intentionally leaves turn
+    // ownership untouched on a game-ending shot.
     if (this.engine.state.phase === 'game_over') return;
     if (this.engine.state.currentTurnPlayerId !== this.engine.computerId) return;
 
@@ -69,17 +79,32 @@ export class VsComputerSession implements GameSession {
     this.onAIThinkingChange?.(true);
 
     const thinkDelay = 500 + Math.random() * 700;
-    setTimeout(() => {
+    this.aiThinkTimer = setTimeout(() => {
+      this.aiThinkTimer = null;
+      // Guard against a stale timer firing after the match ended or a
+      // rematch reset the engine out from under it while we were "thinking".
+      if (this.engine.state.phase === 'game_over' || this.engine.state.currentTurnPlayerId !== this.engine.computerId) {
+        this.aiThinking = false;
+        this.onAIThinkingChange?.(false);
+        return;
+      }
+
       const aiGroup = this.engine.getShooterGroup(this.engine.computerId);
       const shot = planAIShot(this.engine.state.balls, aiGroup, this.difficulty);
       this.aiThinking = false;
       this.onAIThinkingChange?.(false);
 
-      // Ball-in-hand for the AI: place cue ball at a safe default spot if needed.
+      let cueBallPlacement: ShotRequest['cueBallPlacement'];
       if (this.engine.state.ballInHand) {
-        shot.direction = shot.direction; // placement handled inside beginShot via default position if unset
+        cueBallPlacement = planAIBallInHandPlacement(
+          this.engine.state.balls,
+          aiGroup,
+          this.difficulty,
+          this.engine.isBallInHandRestrictedToHeadString()
+        );
       }
-      this.runShot({ direction: shot.direction, power: shot.power });
+
+      this.runShot({ direction: shot.direction, power: shot.power, cueBallPlacement });
     }, thinkDelay);
   }
 
@@ -104,6 +129,12 @@ export class VsComputerSession implements GameSession {
   }
 
   requestRematch(): void {
+    if (this.aiThinkTimer) {
+      clearTimeout(this.aiThinkTimer);
+      this.aiThinkTimer = null;
+    }
+    this.aiThinking = false;
+    this.simulating = false;
     const p1 = this.engine.state.players[0].name;
     this.engine = new LocalMatchEngine({ humanName: p1, computerName: `Computer (${this.difficulty})` });
     this.emitState();
@@ -115,6 +146,10 @@ export class VsComputerSession implements GameSession {
   }
 
   leave(): void {
+    if (this.aiThinkTimer) {
+      clearTimeout(this.aiThinkTimer);
+      this.aiThinkTimer = null;
+    }
     this.stateListeners = [];
     this.tickListeners = [];
   }
