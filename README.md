@@ -5,7 +5,6 @@ A Classic 8-Ball Pool
 A full-stack, TypeScript implementation of classic 8-ball pool. Play against a friend online in real time, or challenge a computer opponent across four difficulty levels — all rendered on an HTML5 Canvas with a from-scratch 2D physics engine and WPA-based rules.
 
 > **Play now:** [https://billiard-clash.vercel.app/](https://billiard-clash.vercel.app/)
-> **Screenshots:** not included — see [Screenshots](#screenshots) for why.
 
 ## Table of Contents
 
