@@ -1,8 +1,10 @@
-# Classic 8-Ball Pool
+# Billiard Clash
+
+A Classic 8-Ball Pool
 
 A full-stack, TypeScript implementation of classic 8-ball pool. Play against a friend online in real time, or challenge a computer opponent across four difficulty levels — all rendered on an HTML5 Canvas with a from-scratch 2D physics engine and WPA-based rules.
 
-> **Live demo:** not yet deployed — see [Deployment](#deployment) for why and how to deploy it yourself.
+> **Play now:** [https://billiard-clash.vercel.app/](https://billiard-clash.vercel.app/)
 > **Screenshots:** not included — see [Screenshots](#screenshots) for why.
 
 ## Table of Contents
@@ -46,7 +48,9 @@ This environment does not have a browser available to drive the running app and 
 
 ## Demo
 
-No live demo URL yet. The project is deploy-ready (see [Deployment](#deployment)); once a frontend + backend host are connected, add the live URL here.
+**Play now:** [https://billiard-clash.vercel.app/](https://billiard-clash.vercel.app/)
+
+The client is deployed on Vercel; the multiplayer server is deployed separately on Render at `https://billiard-clash.onrender.com`. Note: Render's free tier spins down after inactivity, so the very first connection after a period of no traffic may take up to ~30-60 seconds while the server cold-starts.
 
 ## Game Modes
 
@@ -178,29 +182,29 @@ Builds `shared` (dual CJS + ESM output — CJS for the Node server, ESM for the 
 
 ## Deployment
 
-Suggested split:
-- **Client** (`client/dist`, static): Vercel or Netlify.
-- **Server** (stateful, long-running WebSocket process): Render, Railway, or Fly.io — not a static/serverless host.
+Deployed as:
+- **Client** (`client/dist`, static): [Vercel](https://billiard-clash.vercel.app/)
+- **Server** (stateful, long-running WebSocket process): [Render](https://billiard-clash.onrender.com/)
 
-Steps:
+Steps to reproduce this deployment:
 1. Deploy `server/` to Render/Railway/Fly.io. Set `CLIENT_ORIGIN` to your deployed client's URL. Note the server's public URL.
 2. Deploy `client/` to Vercel/Netlify. Set `VITE_SERVER_URL` to the server's public URL from step 1. Build command: `npm run build --workspace=shared && npm run build --workspace=client`; output directory: `client/dist`.
 3. Confirm the client can reach the server (open the deployed client, try Create Room).
 
-This project was not deployed as part of this build — the sandbox this was built in has no credentials for Vercel/Render/etc. and no way to provision them. Everything above is written so you (or an agent with real account access, e.g. Claude Code or Claude in Chrome running with your logged-in accounts) can complete deployment in a few minutes.
-
 ## Testing
 
 ```bash
-npm run test          # shared package (physics + rules)
-npm run test --workspace=server   # server integration tests
+npm run test --workspace=shared
+npm run test --workspace=server
+npm run test --workspace=client
 ```
 
-**32 automated tests, all passing:**
-- `shared`: 24 tests — physics (no ball overlap ever, momentum transfer, rail containment, pocket detection) and WPA rules (every foul type, group assignment, all three 8-ball outcomes, turn switching)
-- `server`: 8 tests — real Socket.IO integration tests covering room creation, joining, full-room rejection, invalid/malformed room codes, turn-based shot validation, and malformed-shot rejection
+**121 automated tests, all passing:**
+- `shared` (51 tests) — physics (no ball overlap ever, momentum transfer, rail containment, pocket detection), WPA rules (every foul type, group assignment, all three 8-ball outcomes, turn switching), the shared shot-velocity formula, and ball-in-hand placement legality (bounds, overlap, pocket mouths, head-string restriction).
+- `server` (18 tests) — real Socket.IO integration tests covering room creation/joining, turn-based shot validation, the `shot_started`/`shot_applied` broadcast sequence, and server-side ball-in-hand placement validation (including rejecting an illegal client-supplied position).
+- `client` (52 tests) — layout-independent power-key controls, online shot animation/reconciliation, AI ball-in-hand placement, game-over state handling and AI-stops-after-game-over, and full `GameScreen` coverage (cue visibility gating, the end-of-game modal, and interactive ball-in-hand placement) using a stubbed canvas/audio context since no headless browser is available in the environment this was built in.
 
-Client UI/rendering code does not have automated tests (no headless browser is available in the environment this was built in — see [Known Limitations](#known-limitations)); the game logic it depends on is fully covered via the `shared` and `server` test suites, and was additionally verified with a live end-to-end smoke test (real Socket.IO clients creating a room, joining, and exchanging a physics-resolved shot against the actually-running server).
+All three commands were also verified end-to-end against a live running server (real Socket.IO clients creating a room, joining, and exchanging validated, physics-resolved shots).
 
 ## Project Structure
 
@@ -240,16 +244,14 @@ billiard-clash/
 
 ## Known Limitations
 
-- **No automated screenshots or browser-based UI tests** — this project was built in a sandboxed environment with no headless browser tool available, so the UI has been verified via successful production builds and a real end-to-end Socket.IO smoke test, but not visually screenshotted or click-tested by an automated agent.
-- **Not deployed** — see [Deployment](#deployment).
-- **Online-mode animation is authoritative-state-driven, not physics-replayed on the receiving client.** The shooting client runs the real physics simulation for immediate feedback; the receiving client currently renders the server's final post-shot state directly rather than replaying the exact shot animation frame-by-frame. Both clients converge on the same final positions (the server is authoritative), but the receiving player doesn't currently see the balls roll — a nice follow-up would be to also broadcast the shot's initial velocity so both clients can replay the same deterministic simulation.
+- **No automated screenshots or browser-based UI tests** — this project was built in a sandboxed environment with no headless browser tool available, so the UI has been verified via successful production builds, a real end-to-end Socket.IO smoke test, and the live deployment itself, but not visually screenshotted or click-tested by an automated agent.
+- **Render free-tier cold starts** — the deployed server spins down after inactivity; the first multiplayer connection after idle time can take up to ~30-60 seconds.
 - **AI does not currently plan multi-shot position play** at the Easy/Medium tiers (Hard/Insane weight cue-ball position in shot scoring; the lower tiers score purely on pot difficulty).
 - **No dedicated mobile touch power slider / shoot button** — touch play uses drag-to-aim + tap-to-shoot with the same power value from the last W/S/wheel adjustment, rather than a separate on-screen slider.
 - **No background music**, only sound effects (music volume setting exists in Settings for forward-compatibility but nothing plays through it yet).
 
 ## Future Improvements
 
-- Full physics replay/interpolation for the non-shooting client in online matches
 - Position-aware AI planning at all difficulty tiers (currently only Hard/Insane)
 - On-screen mobile power slider and shoot button
 - Spectator mode / room observers
