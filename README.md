@@ -9,7 +9,6 @@ A full-stack, TypeScript implementation of classic 8-ball pool. Play against a f
 ## Table of Contents
 
 - [Features](#features)
-- [Screenshots](#screenshots)
 - [Demo](#demo)
 - [Game Modes](#game-modes)
 - [Controls](#controls)
