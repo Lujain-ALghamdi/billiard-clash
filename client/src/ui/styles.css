@@ -616,3 +616,61 @@ input[type='text']:focus {
     font-size: 0.8rem;
   }
 }
+
+/* ---------- End-game result modal ---------- */
+.result-modal {
+  position: relative;
+  overflow: hidden;
+}
+
+.modal-result-detail {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: -0.8rem 0 1.2rem;
+}
+
+.hud-banner--neutral {
+  color: var(--brass-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.confetti-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -14px;
+  width: 8px;
+  height: 14px;
+  opacity: 0.9;
+  border-radius: 1px;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+  transform: rotate(var(--rot, 0deg));
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) rotate(var(--rot, 0deg));
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(340px) rotate(calc(var(--rot, 0deg) + 180deg));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    animation: none;
+    display: none;
+  }
+}

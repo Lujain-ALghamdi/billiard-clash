@@ -65,6 +65,9 @@ class FakeSession implements GameSession {
   isMyTurn(): boolean {
     return this.state.currentTurnPlayerId === this.myPlayerId;
   }
+  isShotInProgress(): boolean {
+    return false;
+  }
   submitShot(shot: ShotRequest): void {
     this.submittedShots.push(shot);
   }

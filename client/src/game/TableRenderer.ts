@@ -121,11 +121,33 @@ export class TableRenderer {
     }
   }
 
-  drawBalls(balls: BallState[]): void {
+  /** Draws every on-table ball. Pass excludeCue=true to skip the cue ball (id 0) — used while ball-in-hand placement/aiming is overriding its visual position. */
+  drawBalls(balls: BallState[], excludeCue = false): void {
     for (const ball of balls) {
       if (ball.pocketed || !ball.onTable) continue;
+      if (excludeCue && ball.id === 0) continue;
       this.drawBall(ball);
     }
+  }
+
+  /** Ghost preview of a ball-in-hand candidate placement: green tint if legal, red if not. Never a real ball — purely a UI affordance. */
+  drawPlacementPreview(position: Vec2, valid: boolean): void {
+    const ctx = this.ctx;
+    const p = this.toScreen(position);
+    const r = BALL.RADIUS * this.scale;
+    const tint = valid ? 'rgba(74, 157, 111, 0.55)' : 'rgba(184, 50, 61, 0.55)';
+    const ringColor = valid ? '#4a9d6f' : '#b8323d';
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = tint;
+    ctx.fill();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = ringColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawBall(ball: BallState): void {
