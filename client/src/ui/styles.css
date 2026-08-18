@@ -399,23 +399,31 @@ input[type='text']:focus {
   gap: 2.5rem;
 }
 
-.menu-title {
-  font-size: clamp(2.6rem, 7vw, 4.4rem);
-  letter-spacing: 0.01em;
-  color: var(--text-primary);
+.brand-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
 }
 
-.menu-title .accent {
+.brand-title {
+  font-size: clamp(2.8rem, 8vw, 5.2rem);
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.brand-title .accent {
   color: var(--brass-bright);
 }
 
-.menu-subtitle {
+.brand-subtitle {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  letter-spacing: 0.16em;
+  font-size: clamp(0.68rem, 1.6vw, 0.85rem);
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  margin-top: -1.6rem;
 }
 
 .menu-actions {
@@ -437,14 +445,22 @@ input[type='text']:focus {
   font-size: 1.6rem;
 }
 
+.field-group {
+  width: 100%;
+  text-align: left;
+}
+
 .field-label {
   display: block;
   text-align: left;
   margin-bottom: 0.4rem;
 }
 
-.field {
+.field,
+.menu-actions .btn,
+.field-group .field {
   width: 100%;
+  box-sizing: border-box;
 }
 
 .option-grid {
@@ -458,25 +474,35 @@ input[type='text']:focus {
   border-radius: var(--radius-md);
   border: 1px solid rgba(243, 237, 224, 0.1);
   background: var(--bg-panel-raised);
+  color: var(--text-primary);
   text-align: left;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .option-card:hover {
   border-color: var(--brass);
   transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(201, 162, 75, 0.15);
+}
+
+.option-card:focus-visible {
+  outline: 2px solid var(--brass-bright);
+  outline-offset: 2px;
+  border-color: var(--brass);
 }
 
 .option-card-title {
   font-weight: 700;
   font-family: var(--font-mono);
   letter-spacing: 0.06em;
+  color: var(--text-primary);
   margin-bottom: 0.3rem;
 }
 
 .option-card-desc {
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--brass-bright);
+  opacity: 0.85;
 }
 
 .room-code-display {
@@ -570,12 +596,34 @@ input[type='text']:focus {
 
 .back-link {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
   color: var(--text-muted);
   font-size: 0.85rem;
-  background: none;
-  border: none;
-  padding: 0;
-  text-decoration: underline;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--bg-panel-raised);
+  border: 1px solid rgba(243, 237, 224, 0.14);
+  border-radius: 999px;
+  padding: 0.55em 1.2em 0.55em 1em;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.back-link:hover {
+  color: var(--text-primary);
+  border-color: var(--brass);
+  box-shadow: 0 0 0 1px rgba(201, 162, 75, 0.25), 0 4px 14px rgba(201, 162, 75, 0.18);
+}
+
+.back-link:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.back-link:focus-visible {
+  outline: 2px solid var(--brass-bright);
+  outline-offset: 2px;
 }
 
 .how-to-content {
@@ -597,11 +645,75 @@ input[type='text']:focus {
   margin-top: 0;
 }
 
+.control-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  row-gap: 0.7rem;
+  column-gap: 1.25rem;
+  align-items: center;
+}
+
+.keycap {
+  justify-self: start;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--brass-bright);
+  background: var(--bg-panel-raised);
+  border: 1px solid rgba(201, 162, 75, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 0.4em 0.75em;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+.control-desc {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.menu-panel--wide {
+  width: min(560px, 92vw);
+}
+
 .credits-content {
   text-align: left;
   color: var(--text-muted);
   font-size: 0.9rem;
   line-height: 1.7;
+}
+
+.credits-game-name {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  color: var(--text-primary);
+  margin-bottom: 0.6rem;
+}
+
+.credits-divider {
+  height: 1px;
+  margin: 1.4rem 0;
+  background: linear-gradient(90deg, rgba(201, 162, 75, 0.5), rgba(201, 162, 75, 0));
+}
+
+.credits-signature {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+.credits-author {
+  color: var(--brass-bright);
+  font-weight: 600;
+}
+
+.credits-tagline {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+  color: var(--brass-bright);
+  margin: 0;
 }
 
 @media (max-width: 640px) {

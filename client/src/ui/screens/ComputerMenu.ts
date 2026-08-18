@@ -18,7 +18,7 @@ export function renderComputerMenu(root: HTMLElement, defaultName: string, cb: C
       <button class="back-link" id="back">&larr; Main Menu</button>
       <div class="panel menu-panel">
         <h2>CHOOSE DIFFICULTY</h2>
-        <div>
+        <div class="field-group">
           <label class="field-label eyebrow" for="player-name">Player Name</label>
           <input class="field" type="text" id="player-name" maxlength="24" value="${escapeAttr(defaultName || 'Player')}" />
         </div>

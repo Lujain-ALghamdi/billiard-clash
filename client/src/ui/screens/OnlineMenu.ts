@@ -22,7 +22,7 @@ export function renderOnlineMenu(root: HTMLElement, defaultName: string, cb: Onl
           <button class="back-link" id="back">&larr; Main Menu</button>
           <div class="panel menu-panel">
             <h2>PLAY ONLINE</h2>
-            <div>
+            <div class="field-group">
               <label class="field-label eyebrow" for="player-name">Player Name</label>
               <input class="field" type="text" id="player-name" maxlength="24" value="${escapeAttr(playerName)}" />
             </div>
@@ -82,7 +82,7 @@ export function renderOnlineMenu(root: HTMLElement, defaultName: string, cb: Onl
         <button class="back-link" id="back">&larr; Back</button>
         <div class="panel menu-panel">
           <h2>JOIN ROOM</h2>
-          <div>
+          <div class="field-group">
             <label class="field-label eyebrow" for="room-code-input">Enter Room Code</label>
             <input class="field" type="text" id="room-code-input" maxlength="8" placeholder="8B-XXXX" />
           </div>

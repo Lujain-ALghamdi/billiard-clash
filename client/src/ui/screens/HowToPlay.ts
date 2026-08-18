@@ -2,13 +2,18 @@ export function renderHowToPlay(root: HTMLElement, onBack: () => void): void {
   root.innerHTML = `
     <div class="menu-screen screen-enter">
       <button class="back-link" id="back">&larr; Main Menu</button>
-      <div class="panel menu-panel" style="width:min(560px,92vw)">
+      <div class="panel menu-panel menu-panel--wide">
         <h2>HOW TO PLAY</h2>
         <div class="how-to-content">
           <h3>Controls</h3>
-          <p><strong>Mouse move</strong> — Aim &nbsp;&nbsp; <strong>Left click</strong> — Shoot<br/>
-          <strong>W</strong> — Increase shot power &nbsp;&nbsp; <strong>S</strong> — Decrease shot power<br/>
-          <strong>Mouse wheel</strong> — Adjust shot power &nbsp;&nbsp; <strong>ESC</strong> — Pause menu</p>
+          <div class="control-list">
+            <span class="keycap">Mouse Move</span><span class="control-desc">Aim</span>
+            <span class="keycap">Left Click</span><span class="control-desc">Shoot</span>
+            <span class="keycap">W</span><span class="control-desc">Increase shot power</span>
+            <span class="keycap">S</span><span class="control-desc">Decrease shot power</span>
+            <span class="keycap">Mouse Wheel</span><span class="control-desc">Adjust shot power</span>
+            <span class="keycap">ESC</span><span class="control-desc">Pause menu</span>
+          </div>
 
           <h3>Objective</h3>
           <p>Pocket all of your assigned group (solids 1–7 or stripes 9–15), then legally pocket the 8-ball to win.</p>

@@ -9,9 +9,9 @@ export interface MainMenuCallbacks {
 export function renderMainMenu(root: HTMLElement, cb: MainMenuCallbacks): void {
   root.innerHTML = `
     <div class="menu-screen screen-enter">
-      <div>
-        <h1 class="menu-title">CLASSIC <span class="accent">8-BALL</span> POOL</h1>
-        <div class="menu-subtitle">Online &amp; vs Computer</div>
+      <div class="brand-block">
+        <h1 class="brand-title">Billiard <span class="accent">Clash</span></h1>
+        <div class="brand-subtitle">A CLASSIC 8-BALL POOL</div>
       </div>
       <div class="menu-actions">
         <button class="btn btn-primary" id="play-online">Play Online</button>
